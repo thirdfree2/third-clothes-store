@@ -1,0 +1,215 @@
+version: "2.4"
+
+services:
+  apisix:
+    image: apache/apisix:3.14.1-debian
+    container_name: third-shop-apisix
+    ports:
+      - "${APISIX_PORT:-9080}:9080"
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    networks:
+      - third-shop-micro-net
+
+  db:
+    image: postgres:17-alpine
+    container_name: third-shop-db
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-app}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-app}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - third-shop-micro-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: third-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - third-shop-micro-net
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: third-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do
+        echo 'waiting for minio...';
+        sleep 2;
+      done;
+      mc mb -p local/clothes-images || true;
+      mc anonymous set download local/clothes-images || true;
+      echo 'minio bucket ready';
+      "
+    networks:
+      - third-shop-micro-net
+
+  migrate-clothing:
+    image: migrate/migrate:v4.17.1
+    container_name: third-clothing-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../clothing-service/migrations:/migrations
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://postgres:postgres@db:5432/app?sslmode=disable",
+        "up",
+      ]
+    networks:
+      - third-shop-micro-net
+
+  migrate-auth:
+    image: thirdza/clothes-auth-service:latest
+    container_name: third-auth-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /app
+    command: ["/app/auth-migrate"]
+    environment:
+      APP_ENV: development
+      HTTP_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: app
+      DB_SSLMODE: disable
+      JWT_SECRET: super-secret-dev-key
+      JWT_ISSUER: auth-service
+      JWT_ACCESS_TOKEN_TTL_MINUTES: 60
+    networks:
+      - third-shop-micro-net
+
+  migrate-user:
+    image: thirdza/clothes-user-service:latest
+    container_name: third-user-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /app
+    command: ["/app/user-migrate"]
+    environment:
+      APP_ENV: development
+      HTTP_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: app
+      DB_SSLMODE: disable
+      JWT_SECRET: super-secret-dev-key
+      JWT_ISSUER: auth-service
+    networks:
+      - third-shop-micro-net
+
+  clothing-service:
+    image: thirdza/clothes-clothing-service:latest
+    container_name: third-clothing-service
+    depends_on:
+      db:
+        condition: service_healthy
+      minio-init:
+        condition: service_started
+    environment:
+      APP_ENV: development
+      HTTP_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: app
+      DB_SSLMODE: disable
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: clothes-images
+      MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_URL: http://15.135.223.24:9000
+      JWT_SECRET: super-secret-dev-key
+      JWT_ISSUER: auth-service
+    ports:
+      - "8080:8080"
+    networks:
+      - third-shop-micro-net
+
+  auth-service:
+    image: thirdza/clothes-auth-service:latest
+    container_name: third-auth-service
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      HTTP_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: app
+      DB_SSLMODE: disable
+      JWT_SECRET: super-secret-dev-key
+      JWT_ISSUER: auth-service
+    ports:
+      - "8090:8080"
+    networks:
+      - third-shop-micro-net
+
+  user-service:
+    image: thirdza/clothes-user-service:latest
+    container_name: third-user-service
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      HTTP_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: app
+      DB_SSLMODE: disable
+      JWT_SECRET: super-secret-dev-key
+      JWT_ISSUER: auth-service
+      CLOTHING_SERVICE_BASE_URL: http://clothing-service:8080
+      MINIO_PUBLIC_URL: http://15.135.223.24:9000
+    ports:
+      - "8070:8080"
+    networks:
+      - third-shop-micro-net
+
+networks:
+  third-shop-micro-net:
+    name: third-shop-micro-net
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
