@@ -1,0 +1,9 @@
+ALTER TABLE clothes
+ADD COLUMN IF NOT EXISTS price NUMERIC(12, 2) NOT NULL DEFAULT 0;
+
+ALTER TABLE clothes
+DROP CONSTRAINT IF EXISTS clothes_price_check;
+
+ALTER TABLE clothes
+ADD CONSTRAINT clothes_price_check
+CHECK (price >= 0);

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS admin_profiles;
+DROP TABLE IF EXISTS users;

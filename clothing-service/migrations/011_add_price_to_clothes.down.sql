@@ -1,0 +1,5 @@
+ALTER TABLE clothes
+DROP CONSTRAINT IF EXISTS clothes_price_check;
+
+ALTER TABLE clothes
+DROP COLUMN IF EXISTS price;

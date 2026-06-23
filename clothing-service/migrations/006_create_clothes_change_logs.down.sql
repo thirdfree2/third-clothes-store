@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS clothes_change_logs;

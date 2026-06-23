@@ -1,0 +1,55 @@
+services:
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: clothes-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../clothing-service/migrations:/migrations
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://postgres:postgres@postgres:5432/app?sslmode=disable",
+        "up",
+      ]
+
+  clothing-service:
+    build:
+      context: ../clothing-service
+      dockerfile: Dockerfile
+    container_name: clothing-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: development
+      HTTP_PORT: 8080
+
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: app
+      DB_SSL_MODE: disable
+
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: clothes-images
+      MINIO_USE_SSL: "false"
+
+      # URL นี้ให้ browser/frontend ใช้เปิดรูป
+      MINIO_PUBLIC_URL: http://localhost:9000
+    ports:
+      - "8080:8080"
+
+volumes:
+  clothes_postgres_data:
+  clothes_minio_data:
