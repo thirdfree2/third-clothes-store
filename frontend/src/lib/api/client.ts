@@ -1,7 +1,7 @@
 import type { ApiEnvelope } from "./types";
 
 // const defaultBaseURL = "http://localhost:9080";
-const defaultBaseURL = "https://656a-2405-9800-b650-320f-54aa-27e2-388a-5052.ngrok-free.app/";
+const defaultBaseURL = "https://third-shop.duckdns.org";
 
 
 export class ApiError extends Error {
