@@ -151,7 +151,7 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: clothes-images
       MINIO_USE_SSL: "false"
-      MINIO_PUBLIC_URL: http://15.135.223.24:9000
+      MINIO_PUBLIC_URL: https://third-shop.duckdns.org/files
       JWT_SECRET: super-secret-dev-key
       JWT_ISSUER: auth-service
     ports:
