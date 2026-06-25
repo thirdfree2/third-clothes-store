@@ -37,6 +37,8 @@ func NewRouter(
 		{
 			me.GET("", customerHandler.GetMe)
 			me.PATCH("", customerHandler.UpdateMe)
+			me.GET("/address", customerHandler.GetDefaultAddress)
+			me.PATCH("/address", customerHandler.UpdateDefaultAddress)
 		}
 
 		cart := v1.Group("/cart")

@@ -87,6 +87,7 @@ export type CustomerProfile = {
   phone: string | null;
   date_of_birth: string | null;
   marketing_opt_in: boolean;
+  address: CustomerAddress | null;
 };
 
 export type UpdateCustomerProfileInput = {
@@ -95,6 +96,33 @@ export type UpdateCustomerProfileInput = {
   phone: string | null;
   date_of_birth: string | null;
   marketing_opt_in: boolean;
+  address?: UpdateCustomerAddressInput;
+};
+
+export type CustomerAddress = {
+  id: number;
+  recipient_name: string;
+  phone: string;
+  address_line1: string;
+  address_line2: string | null;
+  subdistrict: string | null;
+  district: string;
+  province: string;
+  postal_code: string;
+  country_code: string;
+  is_default: boolean;
+};
+
+export type UpdateCustomerAddressInput = {
+  recipient_name: string;
+  phone: string;
+  address_line1: string;
+  address_line2: string | null;
+  subdistrict: string | null;
+  district: string;
+  province: string;
+  postal_code: string;
+  country_code: string;
 };
 
 export type PurchaseItem = {

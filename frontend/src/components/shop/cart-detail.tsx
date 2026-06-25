@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { cartApi } from "@/lib/api/cart";
+import { customerApi } from "@/lib/api/customer";
 import { purchasesApi } from "@/lib/api/purchases";
-import type { Cart, CartItem } from "@/lib/api/types";
+import type { Cart, CartItem, CustomerProfile } from "@/lib/api/types";
 import { tokenStore } from "@/lib/auth/token-store";
 
 type CartState =
@@ -23,7 +24,10 @@ export function CartDetail() {
   const [busyItemID, setBusyItemID] = useState<number | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
+  const [addressWarning, setAddressWarning] = useState<string | null>(null);
+  const [profileWarning, setProfileWarning] = useState<string | null>(null);
 
   async function loadCart() {
     const token = tokenStore.get("customer");
@@ -146,17 +150,62 @@ export function CartDetail() {
 
     setActionError(null);
     setCheckoutMessage(null);
+    setAddressWarning(null);
+    setProfileWarning(null);
     setIsCheckingOut(true);
 
     try {
+      const profile = await customerApi.getMe(token);
+
+      if (!hasCheckoutAddress(profile)) {
+        setAddressWarning(
+          "Please add your delivery address before checkout so we know where to send your order.",
+        );
+        return;
+      }
+
       const purchase = await purchasesApi.createFromCart(token, state.cart);
       await cartApi.clear(token);
       await loadCart();
       setCheckoutMessage(`Order #${purchase.id} created successfully`);
     } catch (err) {
+      if (isProfileNotFoundError(err)) {
+        setProfileWarning(
+          "Please update your user profile before checkout. After that, add your delivery address.",
+        );
+        return;
+      }
+
       setActionError(err instanceof ApiError ? err.message : "Cannot checkout");
     } finally {
       setIsCheckingOut(false);
+    }
+  }
+
+  async function updateProfileForCheckout() {
+    const token = tokenStore.get("customer");
+
+    if (!token) {
+      setActionError("Customer token is missing");
+      return;
+    }
+
+    setActionError(null);
+    setIsUpdatingProfile(true);
+
+    try {
+      await customerApi.updateMe(token, {
+        first_name: null,
+        last_name: null,
+        phone: null,
+        date_of_birth: null,
+        marketing_opt_in: false,
+      });
+      window.location.href = "/profile";
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Cannot update profile");
+    } finally {
+      setIsUpdatingProfile(false);
     }
   }
 
@@ -187,6 +236,44 @@ export function CartDetail() {
       {actionError ? <p className="mt-4 text-sm font-medium text-clay">{actionError}</p> : null}
       {checkoutMessage ? (
         <p className="mt-4 text-sm font-medium text-moss">{checkoutMessage}</p>
+      ) : null}
+      {profileWarning ? (
+        <section className="mt-4 rounded-md border border-clay/25 bg-clay/10 p-4 shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-clay">User profile required</p>
+              <p className="mt-1 text-sm leading-6 text-black/60">
+                {profileWarning}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={updateProfileForCheckout}
+              disabled={isUpdatingProfile}
+              className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isUpdatingProfile ? "Updating..." : "Update user profile"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {addressWarning ? (
+        <section className="mt-4 rounded-md border border-clay/25 bg-clay/10 p-4 shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-clay">Delivery address required</p>
+              <p className="mt-1 text-sm leading-6 text-black/60">
+                {addressWarning}
+              </p>
+            </div>
+            <Link
+              href="/profile"
+              className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-sm font-semibold text-white transition hover:bg-black"
+            >
+              Add address
+            </Link>
+          </div>
+        </section>
       ) : null}
 
       {items.length === 0 ? (
@@ -382,4 +469,29 @@ function formatMoney(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })} THB`;
+}
+
+function hasCheckoutAddress(profile: CustomerProfile): boolean {
+  const address = profile.address;
+
+  if (!address) {
+    return false;
+  }
+
+  return Boolean(
+    address.recipient_name.trim() &&
+      address.phone.trim() &&
+      address.address_line1.trim() &&
+      address.district.trim() &&
+      address.province.trim() &&
+      address.postal_code.trim() &&
+      address.country_code.trim(),
+  );
+}
+
+function isProfileNotFoundError(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    (err.code === 404101 || err.message === "customer profile not found")
+  );
 }

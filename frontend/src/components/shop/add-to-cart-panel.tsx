@@ -6,12 +6,13 @@ import { FormEvent, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { cartApi } from "@/lib/api/cart";
 import { tokenStore } from "@/lib/auth/token-store";
+import { notifyCartUpdated } from "./cart-count-link";
 
 type AddToCartPanelProps = {
   clothesID: number;
 };
 
-const sizeOptions = ["", "S", "M", "L", "XL"];
+const sizeOptions = ["S", "M", "L", "XL"];
 
 export function AddToCartPanel({ clothesID }: AddToCartPanelProps) {
   const router = useRouter();
@@ -25,6 +26,11 @@ export function AddToCartPanel({ clothesID }: AddToCartPanelProps) {
     event.preventDefault();
     setError(null);
 
+    if (!size) {
+      setError("Please choose a size before adding this item to your cart.");
+      return;
+    }
+
     const token = tokenStore.get("customer");
 
     if (!token) {
@@ -35,17 +41,18 @@ export function AddToCartPanel({ clothesID }: AddToCartPanelProps) {
     setStatus("adding");
 
     try {
-      await cartApi.addItem(token, {
+      const cart = await cartApi.addItem(token, {
         clothes_id: clothesID,
         quantity,
         size,
       });
       setStatus("added");
+      notifyCartUpdated(cart);
     } catch (err) {
       setStatus("idle");
       if (err instanceof ApiError) {
         setError(err.message);
-        if (err?.message == 'Request failed with status 401') {
+        if (err?.message === "Request failed with status 401") {
           router.push(`/login?returnTo=${encodeURIComponent(pathname)}`);
         }
       } else {
@@ -56,25 +63,41 @@ export function AddToCartPanel({ clothesID }: AddToCartPanelProps) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-6 border-t border-black/10 pt-5">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium text-ink">
-          Size
-          <select
-            value={size}
-            onChange={(event) => {
-              setSize(event.target.value);
-              setStatus("idle");
-            }}
-            className="mt-2 h-11 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
-          >
-            {sizeOptions.map((option) => (
-              <option key={option || "none"} value={option}>
-                {option || "No size"}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-ink">Size</p>
+          <p className="text-xs font-medium text-black/45">Required</p>
+        </div>
+        <div className="mt-3 grid grid-cols-4 gap-2" role="radiogroup" aria-label="Size">
+          {sizeOptions.map((option) => {
+            const isSelected = size === option;
 
+            return (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => {
+                  setSize(option);
+                  setStatus("idle");
+                  setError(null);
+                }}
+                className={[
+                  "h-11 rounded-md border text-sm font-semibold transition",
+                  isSelected
+                    ? "border-ink bg-ink text-white"
+                    : "border-black/15 bg-white text-ink hover:border-moss hover:text-moss",
+                ].join(" ")}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4">
         <label className="text-sm font-medium text-ink">
           Quantity
           <input
@@ -93,17 +116,21 @@ export function AddToCartPanel({ clothesID }: AddToCartPanelProps) {
       <button
         type="submit"
         disabled={status === "adding"}
-        className="mt-4 h-11 w-full rounded-md bg-ink px-4 text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 h-12 w-full rounded-md bg-ink px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
       >
         {status === "adding" ? "Adding..." : status === "added" ? "Added to cart" : "Add to cart"}
       </button>
 
-      {error ? <p className="mt-3 text-sm font-medium text-clay">{error}</p> : null}
+      {error ? (
+        <p className="mt-3 rounded-md bg-clay/10 px-3 py-2 text-sm font-semibold text-clay">
+          {error}
+        </p>
+      ) : null}
 
       {status === "added" ? (
         <Link
           href="/cart"
-          className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-md border border-black/15 px-4 text-sm font-semibold text-ink hover:border-black/30"
+          className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-md border border-black/15 bg-white px-4 text-sm font-semibold text-ink transition hover:border-moss hover:text-moss"
         >
           View cart
         </Link>

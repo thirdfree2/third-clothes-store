@@ -32,7 +32,7 @@ func main() {
 	cartRepo := postgrescart.NewRepository(db)
 	purchaseRepo := postgrespurchase.NewRepository(db, cfg.MinIOPublicURL)
 	clothesClient := httpclothing.NewClient(cfg.ClothingServiceBaseURL)
-	customerService := services.NewCustomerService(customerProfileRepo)
+	customerService := services.NewCustomerService(customerProfileRepo, customerProfileRepo)
 	cartService := services.NewCartService(cartRepo)
 	purchaseService := services.NewPurchaseService(purchaseRepo, clothesClient)
 

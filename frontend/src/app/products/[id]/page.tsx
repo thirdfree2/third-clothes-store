@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCartPanel } from "@/components/shop/add-to-cart-panel";
+import { CartCountLink } from "@/components/shop/cart-count-link";
 import { clothesApi } from "@/lib/api/clothes";
 
 type ProductDetailPageProps = {
@@ -25,39 +26,37 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
 
   const primaryImage = product.images[0];
   const categoryNames = product.categories.map((category) => category.name);
+  const secondaryImages = product.images.slice(1, 5);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-black/10 pb-5">
-        <div>
-          <Link href="/" className="text-sm font-medium text-moss">
-            Back to shop
-          </Link>
-          <h1 className="mt-2 text-3xl font-semibold text-ink">{product.name}</h1>
-        </div>
-        <nav className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/cart"
-            className="inline-flex h-10 items-center rounded-md border border-black/10 bg-white px-4 text-sm font-semibold text-ink shadow-soft hover:border-moss hover:text-moss"
-          >
-            Cart
-          </Link>
+    <main className="min-h-screen bg-[linear-gradient(180deg,#fbf8f4_0%,#f7f3ef_48%,#efe7df_100%)] text-ink">
+      <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-5">
+        <Link href="/" className="flex items-center gap-3" aria-label="Back to shop">
+          <span className="grid h-10 w-10 place-items-center rounded-md border border-black/10 bg-white text-lg font-semibold text-ink shadow-soft">
+            &larr;
+          </span>
+          <span>
+            <span className="block text-sm font-semibold text-moss">Back to shop</span>
+            <span className="block text-xs font-medium text-black/50">
+              Clothes Store
+            </span>
+          </span>
+        </Link>
+        <nav className="flex flex-wrap items-center gap-2" aria-label="Product navigation">
+          <CartCountLink />
           <Link
             href="/profile"
-            className="inline-flex h-10 items-center rounded-md border border-black/10 bg-white px-4 text-sm font-semibold text-ink shadow-soft hover:border-moss hover:text-moss"
+            className="inline-flex h-10 items-center rounded-md border border-black/10 bg-white/90 px-4 text-sm font-semibold text-ink shadow-soft transition hover:border-moss hover:text-moss"
           >
             User profile
           </Link>
-          <p className="rounded-md bg-white px-4 py-2 text-lg font-semibold text-clay shadow-soft">
-            {formatMoney(product.price)}
-          </p>
         </nav>
       </header>
 
-      <section className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+      <section className="mx-auto grid w-full max-w-6xl gap-8 px-5 pb-12 pt-4 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.82fr)] lg:items-start">
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-md border border-black/10 bg-white shadow-soft">
-            <div className="aspect-[4/3] bg-stone-200">
+          <div className="relative overflow-hidden rounded-md border border-black/10 bg-white shadow-soft">
+            <div className="aspect-[4/5] bg-[#ded4c9] sm:aspect-[5/4] lg:aspect-[4/5]">
               {primaryImage?.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -65,18 +64,25 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                   alt={product.name}
                   className="h-full w-full object-cover"
                 />
-              ) : null}
+              ) : (
+                <div className="flex h-full items-center justify-center p-8 text-center text-sm font-semibold uppercase tracking-[0.2em] text-black/35">
+                  Clothes Store
+                </div>
+              )}
+            </div>
+            <div className="absolute left-4 top-4 rounded-md bg-white/92 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-moss shadow-soft backdrop-blur">
+              Product #{product.id}
             </div>
           </div>
 
-          {product.images.length > 1 ? (
+          {secondaryImages.length > 0 ? (
             <div className="grid grid-cols-4 gap-3">
-              {product.images.slice(1).map((image) => (
+              {secondaryImages.map((image) => (
                 <div
                   key={image.id}
-                  className="overflow-hidden rounded-md border border-black/10 bg-white"
+                  className="overflow-hidden rounded-md border border-black/10 bg-white shadow-soft"
                 >
-                  <div className="aspect-square bg-stone-200">
+                  <div className="aspect-square bg-[#ded4c9]">
                     {image.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -92,48 +98,85 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
           ) : null}
         </div>
 
-        <div className="rounded-md border border-black/10 bg-white p-5 shadow-soft">
-          <dl className="grid gap-5 sm:grid-cols-2">
-            <Info label="Product ID" value={String(product.id)} />
-            <Info label="Price" value={formatMoney(product.price)} />
-            <Info label="Color" value={product.color?.name ?? "None"} />
-            <Info
-              label="Categories"
-              value={categoryNames.length > 0 ? categoryNames.join(", ") : "None"}
-            />
-            <Info label="Images" value={String(product.images.length)} />
-            <Info label="Updated" value={formatDate(product.updated_at)} />
-          </dl>
+        <aside className="rounded-md border border-black/10 bg-white/90 p-5 shadow-soft backdrop-blur lg:sticky lg:top-5">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-clay">
+            Ready-to-wear
+          </p>
+          <h1 className="mt-3 text-4xl font-semibold leading-tight text-ink">
+            {product.name}
+          </h1>
+          <p className="mt-3 text-3xl font-semibold text-clay">
+            {formatMoney(product.price)}
+          </p>
 
-          {categoryNames.length > 0 ? (
-            <div className="mt-6 border-t border-black/10 pt-5">
-              <div className="flex flex-wrap gap-2">
-                {product.categories.map((category) => (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {product.color ? (
+              <span className="inline-flex items-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink">
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 rounded-full border border-black/20"
+                  style={{ backgroundColor: product.color.hex_code }}
+                />
+                {product.color.name}
+              </span>
+            ) : null}
+            {categoryNames.length > 0
+              ? product.categories.map((category) => (
                   <span
                     key={category.id}
-                    className="rounded-md bg-stone-100 px-3 py-1.5 text-sm font-medium text-black/65"
+                    className="rounded-md bg-[#f1ebe4] px-3 py-2 text-sm font-semibold text-black/65"
                   >
                     {category.name}
                   </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
+                ))
+              : null}
+          </div>
+
+          <div className="mt-6 grid gap-3 border-y border-black/10 py-5 sm:grid-cols-3">
+            <Info label="Images" value={String(product.images.length)} />
+            <Info label="Updated" value={formatDate(product.updated_at)} />
+            <Info label="Currency" value="THB" />
+          </div>
+
+          <div className="mt-5 rounded-md bg-[#f7f3ef] p-4">
+            <p className="text-sm font-semibold text-ink">Store note</p>
+            <p className="mt-1 text-sm leading-6 text-black/58">
+              Choose your size before adding this piece to your cart. You can
+              update quantity later from the cart page.
+            </p>
+          </div>
 
           <AddToCartPanel clothesID={product.id} />
+        </aside>
+      </section>
+
+      <section className="mx-auto w-full max-w-6xl px-5 pb-12">
+        <div className="grid gap-4 border-t border-black/10 pt-6 sm:grid-cols-3">
+          <Feature title="Easy styling" text="Pairs cleanly with everyday layers." />
+          <Feature title="Size first" text="Required size selection keeps cart items clear." />
+          <Feature title="Curated rack" text="Part of the current Clothes Store collection." />
         </div>
       </section>
     </main>
   );
 }
 
+function Feature({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-md border border-black/10 bg-white/76 p-4 shadow-soft">
+      <p className="font-semibold text-ink">{title}</p>
+      <p className="mt-1 text-sm leading-6 text-black/55">{text}</p>
+    </div>
+  );
+}
+
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-black/45">
+      <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-black/42">
         {label}
       </dt>
-      <dd className="mt-1 font-medium text-ink">{value}</dd>
+      <dd className="mt-1 text-sm font-semibold text-ink">{value}</dd>
     </div>
   );
 }
@@ -148,6 +191,5 @@ function formatMoney(value: number) {
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
-    timeStyle: "short",
   }).format(new Date(value));
 }
