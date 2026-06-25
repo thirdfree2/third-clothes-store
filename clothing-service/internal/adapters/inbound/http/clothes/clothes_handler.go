@@ -146,12 +146,20 @@ func (h *Handler) FindByID(c *gin.Context) {
 
 func (h *Handler) List(c *gin.Context) {
 	p := httpcommon.ParsePagination(c)
+	categoryID, err := parseOptionalID(c.Query("category_id"))
+	if err != nil {
+		respondError(c, domain.ErrInvalidCategoryID)
+		return
+	}
 
 	clothesList, total, err := h.service.List(
 		c.Request.Context(),
 		ports.Pagination{
 			Limit:  p.Limit,
 			Offset: p.Offset,
+		},
+		ports.ClothesListFilter{
+			CategoryID: categoryID,
 		},
 	)
 
@@ -348,6 +356,19 @@ func parseID(value string) (int64, error) {
 	}
 
 	return id, nil
+}
+
+func parseOptionalID(value string) (*int64, error) {
+	if value == "" {
+		return nil, nil
+	}
+
+	id, err := parseID(value)
+	if err != nil {
+		return nil, err
+	}
+
+	return &id, nil
 }
 
 func toResponse(clothes *domain.Clothes, minIOPublicBaseURL string) ClothesResponse {

@@ -1,4 +1,5 @@
 import { clothesApi } from "@/lib/api/clothes";
+import { categoriesApi } from "@/lib/api/category";
 import { CartCountLink } from "@/components/shop/cart-count-link";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -8,20 +9,34 @@ const perPage = 9;
 type HomePageProps = {
   searchParams?: Promise<{
     page?: string | string[];
+    category?: string | string[];
   }>;
 };
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const currentPage = parsePage(params?.page);
+  const selectedCategoryID = parseCategoryID(params?.category);
   const clothes = await clothesApi
-    .list({ page: currentPage, perPage })
+    .list({
+      page: currentPage,
+      perPage,
+      ...(selectedCategoryID ? { category_id: selectedCategoryID } : {}),
+    })
     .catch(() => null);
+  const apiCategories = await categoriesApi.list().catch(() => []);
+  const categories = mergeCategories(
+    apiCategories,
+    clothes?.items.flatMap((item) => item.categories) ?? [],
+  );
   const pagination = clothes?.pagination;
   const totalPages = pagination?.total_pages ?? 0;
   const pageNumbers = getPageNumbers(pagination?.page ?? currentPage, totalPages);
   const featuredItem = clothes?.items[0];
   const totalItems = pagination?.total ?? clothes?.items.length ?? 0;
+  const selectedCategory = categories.find(
+    (category) => category.id === selectedCategoryID,
+  );
 
   return (
     <main className="min-h-screen overflow-hidden bg-[linear-gradient(180deg,#fbf8f4_0%,#f7f3ef_42%,#efe7df_100%)] text-ink">
@@ -139,7 +154,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               Collection
             </p>
             <h2 className="mt-2 text-3xl font-semibold text-ink">
-              Ready-to-wear picks
+              {selectedCategory ? selectedCategory.name : "Ready-to-wear picks"}
             </h2>
           </div>
           <p className="text-sm font-medium text-black/55">
@@ -147,6 +162,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {totalPages > 0 ? ` of ${totalPages}` : ""}
           </p>
         </div>
+        <CategoryFilter
+          categories={categories}
+          selectedCategoryID={selectedCategoryID}
+        />
 
         {clothes ? (
           clothes.items.length > 0 ? (
@@ -175,7 +194,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-2 px-5 pb-12"
         >
           <PaginationLink
-            href={pageHref(Math.max(1, currentPage - 1))}
+            href={pageHref(Math.max(1, currentPage - 1), selectedCategoryID)}
             isDisabled={currentPage <= 1}
           >
             Previous
@@ -184,7 +203,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           {pageNumbers.map((pageNumber) => (
             <PaginationLink
               key={pageNumber}
-              href={pageHref(pageNumber)}
+              href={pageHref(pageNumber, selectedCategoryID)}
               isActive={pageNumber === currentPage}
             >
               {pageNumber}
@@ -192,7 +211,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           ))}
 
           <PaginationLink
-            href={pageHref(Math.min(totalPages, currentPage + 1))}
+            href={pageHref(Math.min(totalPages, currentPage + 1), selectedCategoryID)}
             isDisabled={currentPage >= totalPages}
           >
             Next
@@ -200,6 +219,66 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </nav>
       ) : null}
     </main>
+  );
+}
+
+function CategoryFilter({
+  categories,
+  selectedCategoryID,
+}: {
+  categories: { id: number; name: string }[];
+  selectedCategoryID: number | null;
+}) {
+  if (categories.length === 0) {
+    return null;
+  }
+
+  return (
+    <nav
+      aria-label="Filter products by category"
+      className="mb-6 flex flex-wrap gap-2"
+    >
+      <Link
+        href="/#collection"
+        className={[
+          "inline-flex h-10 items-center rounded-md border px-4 text-sm font-semibold shadow-soft transition",
+          selectedCategoryID === null
+            ? "border-ink bg-ink text-white"
+            : "border-black/10 bg-white text-ink hover:border-moss hover:text-moss",
+        ].join(" ")}
+      >
+        All
+      </Link>
+      {categories.map((category) => (
+        <Link
+          key={category.id}
+          href={`/?category=${category.id}#collection`}
+          className={[
+            "inline-flex h-10 items-center rounded-md border px-4 text-sm font-semibold shadow-soft transition",
+            selectedCategoryID === category.id
+              ? "border-ink bg-ink text-white"
+              : "border-black/10 bg-white text-ink hover:border-moss hover:text-moss",
+          ].join(" ")}
+        >
+          {category.name}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+function mergeCategories(
+  primaryCategories: { id: number; name: string }[],
+  fallbackCategories: { id: number; name: string }[],
+): { id: number; name: string }[] {
+  const categoryMap = new Map<number, { id: number; name: string }>();
+
+  for (const category of [...primaryCategories, ...fallbackCategories]) {
+    categoryMap.set(category.id, category);
+  }
+
+  return Array.from(categoryMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
   );
 }
 
@@ -329,8 +408,30 @@ function parsePage(value: string | string[] | undefined): number {
   return page;
 }
 
-function pageHref(page: number): string {
-  return page === 1 ? "/" : `/?page=${page}`;
+function parseCategoryID(value: string | string[] | undefined): number | null {
+  const categoryValue = Array.isArray(value) ? value[0] : value;
+  const categoryID = Number(categoryValue);
+
+  if (!Number.isInteger(categoryID) || categoryID < 1) {
+    return null;
+  }
+
+  return categoryID;
+}
+
+function pageHref(page: number, categoryID: number | null): string {
+  const params = new URLSearchParams();
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  if (categoryID) {
+    params.set("category", String(categoryID));
+  }
+
+  const query = params.toString();
+  return query ? `/?${query}#collection` : "/#collection";
 }
 
 function categoryText(categories: { name: string }[]): string {

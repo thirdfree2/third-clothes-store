@@ -78,7 +78,7 @@ routes:
         "user-service:8080": 1
 
   - id: user-me-private
-    uri: /api/v1/me
+    uri: /api/v1/me*
     priority: 100
     methods:
       - GET
@@ -145,22 +145,17 @@ routes:
       nodes:
         "clothing-service:8080": 1
 
-  - id: clothing-colors-private
-    uri: /api/v1/colors*
+  - id: clothing-categories-public
+    uri: /api/v1/categories*
     methods:
       - GET
-    plugins:
-      jwt-auth:
-        key_claim_name: iss
-        claims_to_verify:
-          - exp
     upstream:
       type: roundrobin
       nodes:
         "clothing-service:8080": 1
 
-  - id: clothing-categories-private
-    uri: /api/v1/categories*
+  - id: clothing-colors-private
+    uri: /api/v1/colors*
     methods:
       - GET
     plugins:

@@ -145,8 +145,13 @@ func (s *ClothesService) FindByID(ctx context.Context, id int64) (*domain.Clothe
 func (s *ClothesService) List(
 	ctx context.Context,
 	pagination ports.Pagination,
+	filter ports.ClothesListFilter,
 ) ([]domain.Clothes, int64, error) {
-	return s.repo.List(ctx, pagination)
+	if err := validateCategoryID(filter.CategoryID); err != nil {
+		return nil, 0, err
+	}
+
+	return s.repo.List(ctx, pagination, filter)
 }
 
 func (s *ClothesService) Delete(ctx context.Context, id int64) error {
@@ -221,6 +226,18 @@ func validateCategoryIDs(categoryIDs []int64) error {
 		if categoryID <= 0 {
 			return domain.ErrInvalidCategoryID
 		}
+	}
+
+	return nil
+}
+
+func validateCategoryID(categoryID *int64) error {
+	if categoryID == nil {
+		return nil
+	}
+
+	if *categoryID <= 0 {
+		return domain.ErrInvalidCategoryID
 	}
 
 	return nil

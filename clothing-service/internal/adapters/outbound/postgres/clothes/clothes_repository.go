@@ -98,12 +98,19 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*domain.Clothes, e
 func (r *Repository) List(
 	ctx context.Context,
 	pagination ports.Pagination,
+	filter ports.ClothesListFilter,
 ) ([]domain.Clothes, int64, error) {
 	var total int64
 
 	baseQuery := r.db.WithContext(ctx).
 		Model(&ClothesModel{}).
 		Where("deleted_at IS NULL")
+
+	if filter.CategoryID != nil {
+		baseQuery = baseQuery.
+			Joins("JOIN clothes_categories ON clothes_categories.clothes_id = clothes.id").
+			Where("clothes_categories.category_id = ?", *filter.CategoryID)
+	}
 
 	if err := baseQuery.Count(&total).Error; err != nil {
 		return nil, 0, err

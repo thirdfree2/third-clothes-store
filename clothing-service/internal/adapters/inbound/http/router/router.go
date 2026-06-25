@@ -41,6 +41,10 @@ func NewRouter(
 		publicClothes.GET("", clothesHandler.List)
 		publicClothes.GET("/:id", clothesHandler.FindByID)
 	}
+	publicCategory := v1.Group("/categories")
+	{
+		publicCategory.GET("", categoryHandler.CategoryDropdown)
+	}
 
 	v1.Use(authMiddleware.RequireAuth())
 	privateClothes := v1.Group("/clothes")
@@ -57,10 +61,5 @@ func NewRouter(
 	{
 		privateColor.GET("", authMiddleware.RequirePermission("clothes:read"), colorHandler.ColorDropdown)
 	}
-	privateCategory := v1.Group("/categories")
-	{
-		privateCategory.GET("", authMiddleware.RequirePermission("clothes:read"), categoryHandler.CategoryDropdown)
-	}
-
 	return router
 }

@@ -1,6 +1,35 @@
 name: third-shop-infra
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: third-shop-nginx
+    depends_on:
+      - frontend
+      - apisix
+      - minio
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - third-shop-micro-net
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+    container_name: third-shop-frontend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    expose:
+      - "3000"
+    networks:
+      - third-shop-micro-net
+
   apisix:
     image: apache/apisix:3.14.1-debian
     container_name: third-shop-apisix
@@ -113,7 +142,7 @@ services:
       MINIO_BUCKET: clothes-images
       MINIO_USE_SSL: "false"
 
-      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_PUBLIC_URL: ${PUBLIC_BASE_URL:-http://localhost}/files
 
       JWT_SECRET: super-secret-dev-key
       JWT_ISSUER: auth-service
@@ -231,7 +260,7 @@ services:
       JWT_SECRET: super-secret-dev-key
       JWT_ISSUER: auth-service
       CLOTHING_SERVICE_BASE_URL: http://clothing-service:8080
-      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_PUBLIC_URL: ${PUBLIC_BASE_URL:-http://localhost}/files
     ports:
       - "8070:8080"
     networks:
