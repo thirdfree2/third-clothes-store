@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCartPanel } from "@/components/shop/add-to-cart-panel";
 import { CartCountLink } from "@/components/shop/cart-count-link";
+import { ProductImageGallery } from "@/components/shop/product-image-gallery";
 import { clothesApi } from "@/lib/api/clothes";
 
 type ProductDetailPageProps = {
@@ -24,9 +25,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     notFound();
   }
 
-  const primaryImage = product.images[0];
   const categoryNames = product.categories.map((category) => category.name);
-  const secondaryImages = product.images.slice(1, 5);
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#fbf8f4_0%,#f7f3ef_48%,#efe7df_100%)] text-ink">
@@ -54,49 +53,11 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
       </header>
 
       <section className="mx-auto grid w-full max-w-6xl gap-8 px-5 pb-12 pt-4 lg:grid-cols-[minmax(0,1.02fr)_minmax(360px,0.82fr)] lg:items-start">
-        <div className="space-y-4">
-          <div className="relative overflow-hidden rounded-md border border-black/10 bg-white shadow-soft">
-            <div className="aspect-[4/5] bg-[#ded4c9] sm:aspect-[5/4] lg:aspect-[4/5]">
-              {primaryImage?.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={primaryImage.image_url}
-                  alt={product.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center p-8 text-center text-sm font-semibold uppercase tracking-[0.2em] text-black/35">
-                  Clothes Store
-                </div>
-              )}
-            </div>
-            <div className="absolute left-4 top-4 rounded-md bg-white/92 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-moss shadow-soft backdrop-blur">
-              Product #{product.id}
-            </div>
-          </div>
-
-          {secondaryImages.length > 0 ? (
-            <div className="grid grid-cols-4 gap-3">
-              {secondaryImages.map((image) => (
-                <div
-                  key={image.id}
-                  className="overflow-hidden rounded-md border border-black/10 bg-white shadow-soft"
-                >
-                  <div className="aspect-square bg-[#ded4c9]">
-                    {image.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={image.image_url}
-                        alt={`${product.name} ${image.id}`}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <ProductImageGallery
+          images={product.images}
+          productID={product.id}
+          productName={product.name}
+        />
 
         <aside className="rounded-md border border-black/10 bg-white/90 p-5 shadow-soft backdrop-blur lg:sticky lg:top-5">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-clay">

@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api/client";
+import { categoriesApi } from "@/lib/api/category";
 import { clothesApi } from "@/lib/api/clothes";
-import type { Clothes, PaginationMeta } from "@/lib/api/types";
+import { colorApi } from "@/lib/api/color";
+import type { Category, Clothes, Color, PaginationMeta } from "@/lib/api/types";
 import { decodeAccessToken, hasAllPermissions } from "@/lib/auth/jwt";
 import { tokenStore } from "@/lib/auth/token-store";
 
@@ -13,7 +15,23 @@ type TableState =
   | { status: "ready"; items: Clothes[]; pagination: PaginationMeta; error: null }
   | { status: "error"; items: Clothes[]; pagination: PaginationMeta | null; error: string };
 
-const defaultPerPage = 5;
+type PerPageOption = "5" | "10" | "20" | "all";
+
+const defaultPerPage: PerPageOption = "5";
+
+type SearchForm = {
+  name: string;
+  price: string;
+  colorID: string;
+  categoryID: string;
+  createdDate: string;
+};
+
+type FilterOptionsState = {
+  colors: Color[];
+  categories: Category[];
+  error: string | null;
+};
 
 export function ClothesTable() {
   const [state, setState] = useState<TableState>({
@@ -22,14 +40,62 @@ export function ClothesTable() {
     pagination: null,
     error: null,
   });
-  const [query, setQuery] = useState("");
+  const [searchForm, setSearchForm] = useState<SearchForm>({
+    name: "",
+    price: "",
+    colorID: "",
+    categoryID: "",
+    createdDate: "",
+  });
+  const [appliedSearch, setAppliedSearch] = useState<SearchForm>({
+    name: "",
+    price: "",
+    colorID: "",
+    categoryID: "",
+    createdDate: "",
+  });
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsState>({
+    colors: [],
+    categories: [],
+    error: null,
+  });
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<PerPageOption>(defaultPerPage);
   const [deletingID, setDeletingID] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const canDelete = useMemo(() => {
     const token = tokenStore.get("admin");
     return hasAllPermissions(token ? decodeAccessToken(token) : null, ["clothes:write"]);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = tokenStore.get("admin");
+
+    Promise.all([colorApi.list(token), categoriesApi.list(token)])
+      .then(([colors, categories]) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setFilterOptions({ colors, categories, error: null });
+      })
+      .catch((error: unknown) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setFilterOptions({
+          colors: [],
+          categories: [],
+          error: error instanceof Error ? error.message : "Cannot load filter options",
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -43,7 +109,15 @@ export function ClothesTable() {
     }));
 
     clothesApi
-      .list({ page, perPage: defaultPerPage })
+      .list({
+        page,
+        perPage: perPage === "all" ? "all" : Number(perPage),
+        name: appliedSearch.name.trim() || undefined,
+        price: appliedSearch.price.trim() ? Number(appliedSearch.price) : undefined,
+        color_id: appliedSearch.colorID ? Number(appliedSearch.colorID) : undefined,
+        category_id: appliedSearch.categoryID ? Number(appliedSearch.categoryID) : undefined,
+        created_date: appliedSearch.createdDate || undefined,
+      })
       .then((payload) => {
         if (!isMounted) {
           return;
@@ -72,19 +146,7 @@ export function ClothesTable() {
     return () => {
       isMounted = false;
     };
-  }, [page]);
-
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return state.items;
-    }
-
-    return state.items.filter((item) => {
-      const categories = item.categories.map((category) => category.name).join(" ");
-      return `${item.name} ${categories}`.toLowerCase().includes(normalizedQuery);
-    });
-  }, [query, state.items]);
+  }, [appliedSearch, page, perPage]);
 
   async function handleDelete(item: Clothes) {
     setActionError(null);
@@ -127,9 +189,35 @@ export function ClothesTable() {
     }
   }
 
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPage(1);
+    setAppliedSearch({
+      name: searchForm.name.trim(),
+      price: searchForm.price.trim(),
+      colorID: searchForm.colorID,
+      categoryID: searchForm.categoryID,
+      createdDate: searchForm.createdDate,
+    });
+  }
+
+  function handleSearchReset() {
+    const emptySearch = {
+      name: "",
+      price: "",
+      colorID: "",
+      categoryID: "",
+      createdDate: "",
+    };
+
+    setSearchForm(emptySearch);
+    setAppliedSearch(emptySearch);
+    setPage(1);
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl px-5 py-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium uppercase tracking-wide text-moss">
             Inventory
@@ -137,24 +225,110 @@ export function ClothesTable() {
           <h1 className="mt-2 text-3xl font-semibold">Clothes</h1>
         </div>
 
-        <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
-          <label className="w-full max-w-xs text-sm font-medium text-black/70">
-            Search
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Name or category"
-              className="mt-2 h-10 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
-            />
-          </label>
+        <div className="flex w-full justify-end gap-3 self-end sm:w-auto">
           <Link
             href="/backoffice/clothes/new"
             className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-sm font-medium text-white hover:bg-black"
           >
-            Create clothes
+            Create Product
           </Link>
         </div>
       </div>
+
+      <form
+        onSubmit={handleSearchSubmit}
+        className="mt-5 grid gap-3 rounded-md border border-black/10 bg-white p-4 shadow-soft md:grid-cols-[1fr_150px_1fr_1fr_170px_auto]"
+      >
+        <label className="text-sm font-medium text-black/70">
+          Name
+          <input
+            value={searchForm.name}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, name: event.target.value }))
+            }
+            placeholder="Product name"
+            className="mt-2 h-10 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
+          />
+        </label>
+        <label className="text-sm font-medium text-black/70">
+          Price
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={searchForm.price}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, price: event.target.value }))
+            }
+            placeholder="0.00"
+            className="mt-2 h-10 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
+          />
+        </label>
+        <label className="text-sm font-medium text-black/70">
+          Color
+          <select
+            value={searchForm.colorID}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, colorID: event.target.value }))
+            }
+            className="mt-2 h-10 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
+          >
+            <option value="">All colors</option>
+            {filterOptions.colors.map((color) => (
+              <option key={color.id} value={color.id}>
+                {color.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-black/70">
+          Category
+          <select
+            value={searchForm.categoryID}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, categoryID: event.target.value }))
+            }
+            className="mt-2 h-10 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
+          >
+            <option value="">All categories</option>
+            {filterOptions.categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-black/70">
+          Created date
+          <input
+            type="date"
+            value={searchForm.createdDate}
+            onChange={(event) =>
+              setSearchForm((current) => ({ ...current, createdDate: event.target.value }))
+            }
+            className="mt-2 h-10 w-full rounded-md border border-black/15 bg-white px-3 outline-none focus:border-moss"
+          />
+        </label>
+        <div className="flex items-end gap-2">
+          <button
+            type="submit"
+            className="h-10 rounded-md bg-ink px-4 text-sm font-medium text-white hover:bg-black"
+          >
+            Search
+          </button>
+          <button
+            type="button"
+            onClick={handleSearchReset}
+            className="h-10 rounded-md border border-black/15 bg-white px-4 text-sm font-medium hover:border-black/30"
+          >
+            Reset
+          </button>
+        </div>
+      </form>
+
+      {filterOptions.error ? (
+        <p className="mt-3 text-sm font-medium text-clay">{filterOptions.error}</p>
+      ) : null}
 
       {actionError ? <p className="mt-4 text-sm font-medium text-clay">{actionError}</p> : null}
 
@@ -181,11 +355,11 @@ export function ClothesTable() {
                 <TableMessage message={state.error} tone="error" />
               ) : null}
 
-              {state.status === "ready" && filteredItems.length === 0 ? (
+              {state.status === "ready" && state.items.length === 0 ? (
                 <TableMessage message="No clothes found" />
               ) : null}
 
-              {filteredItems.map((item) => (
+              {state.items.map((item) => (
                 <tr key={item.id} className="hover:bg-stone-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -273,6 +447,22 @@ export function ClothesTable() {
               : "Page 1"}
           </p>
           <div className="flex items-center gap-2">
+            <label className="inline-flex items-center gap-2 text-sm font-medium text-black/60">
+              Per page
+              <select
+                value={perPage}
+                onChange={(event) => {
+                  setPerPage(event.target.value as PerPageOption);
+                  setPage(1);
+                }}
+                className="h-9 rounded-md border border-black/15 bg-white px-2 text-sm font-medium text-ink outline-none focus:border-moss"
+              >
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="all">All</option>
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => setPage((current) => Math.max(current - 1, 1))}

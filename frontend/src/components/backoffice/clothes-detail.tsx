@@ -273,10 +273,16 @@ export function ClothesDetail({ id }: ClothesDetailProps) {
           item={state.item}
           canManageImages={canManageImages}
           onImagesChanged={(images) => {
-            setState({
-              status: "ready",
-              item: { ...state.item, images },
-              error: null,
+            setState((current) => {
+              if (current.status !== "ready") {
+                return current;
+              }
+
+              return {
+                status: "ready",
+                item: { ...current.item, images },
+                error: null,
+              };
             });
           }}
         />
@@ -294,20 +300,105 @@ function ReadView({
   canManageImages: boolean;
   onImagesChanged: (images: ClothesImage[]) => void;
 }) {
+  const [viewerImageID, setViewerImageID] = useState<number | null>(null);
+  const primaryImage = item.images[0] ?? null;
+  const viewerImage = item.images.find((image) => image.id === viewerImageID) ?? null;
+
+  useEffect(() => {
+    if (item.images.length === 0) {
+      setViewerImageID(null);
+      return;
+    }
+
+    if (viewerImageID && !item.images.some((image) => image.id === viewerImageID)) {
+      setViewerImageID(null);
+    }
+  }, [item.images, viewerImageID]);
+
+  useEffect(() => {
+    if (viewerImageID === null) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setViewerImageID(null);
+      }
+
+      if (event.key === "ArrowLeft") {
+        showAdjacentViewerImage("previous");
+      }
+
+      if (event.key === "ArrowRight") {
+        showAdjacentViewerImage("next");
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [item.images, viewerImageID]);
+
+  function openViewer(index: number) {
+    const image = item.images[index];
+
+    if (!image?.image_url) {
+      return;
+    }
+
+    setViewerImageID(image.id);
+  }
+
+  function showAdjacentViewerImage(direction: "previous" | "next") {
+    setViewerImageID((current) => {
+      if (current === null || item.images.length === 0) {
+        return current;
+      }
+
+      const currentIndex = item.images.findIndex((image) => image.id === current);
+      if (currentIndex === -1) {
+        return item.images[0]?.id ?? null;
+      }
+
+      const nextIndex =
+        direction === "previous"
+          ? currentIndex === 0
+            ? item.images.length - 1
+            : currentIndex - 1
+          : currentIndex === item.images.length - 1
+            ? 0
+            : currentIndex + 1;
+
+      return item.images[nextIndex]?.id ?? null;
+    });
+  }
+
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
       <div className="space-y-4">
         <div className="overflow-hidden rounded-md border border-black/10 bg-white shadow-soft">
-          <div className="aspect-square bg-stone-200">
-            {item.images[0]?.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.images[0].image_url}
-                alt={item.name}
-                className="h-full w-full object-cover"
-              />
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={() => openViewer(0)}
+            disabled={!primaryImage?.image_url}
+            className="block w-full disabled:cursor-default"
+            aria-label={primaryImage?.image_url ? `View ${item.name} image larger` : undefined}
+          >
+            <div className="aspect-square bg-stone-200">
+              {primaryImage?.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={primaryImage.image_url}
+                  alt={item.name}
+                  className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]"
+                />
+              ) : null}
+            </div>
+          </button>
         </div>
 
         {canManageImages ? (
@@ -336,10 +427,13 @@ function ReadView({
           <h2 className="text-sm font-semibold text-ink">Images</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {item.images.length > 0 ? (
-              item.images.map((image) => (
-                <div
+              item.images.map((image, index) => (
+                <button
                   key={image.id}
-                  className="overflow-hidden rounded-md border border-black/10 bg-stone-100"
+                  type="button"
+                  onClick={() => openViewer(index)}
+                  className="overflow-hidden rounded-md border border-black/10 bg-stone-100 transition hover:border-moss"
+                  aria-label={`View ${item.name} image ${index + 1} larger`}
                 >
                   <div className="aspect-square">
                     {image.image_url ? (
@@ -351,7 +445,7 @@ function ReadView({
                       />
                     ) : null}
                   </div>
-                </div>
+                </button>
               ))
             ) : (
               <p className="col-span-full text-sm text-black/45">No images</p>
@@ -359,6 +453,68 @@ function ReadView({
           </div>
         </div>
       </div>
+
+      {viewerImage?.image_url ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${item.name} large image viewer`}
+          onClick={() => setViewerImageID(null)}
+        >
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setViewerImageID(null);
+            }}
+            className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-md bg-white text-2xl font-semibold text-ink shadow-soft transition hover:bg-stone-100"
+            aria-label="Close image viewer"
+          >
+            &times;
+          </button>
+
+          {item.images.length > 1 ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                showAdjacentViewerImage("previous");
+              }}
+              className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md bg-white text-2xl font-semibold text-ink shadow-soft transition hover:bg-stone-100"
+              aria-label="Previous image"
+            >
+              &larr;
+            </button>
+          ) : null}
+
+          <div
+            className="max-h-[88vh] w-full max-w-5xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={viewerImage.image_url}
+              alt={`${item.name} large view`}
+              className="mx-auto max-h-[88vh] w-auto max-w-full rounded-md object-contain shadow-soft"
+            />
+          </div>
+
+          {item.images.length > 1 ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                showAdjacentViewerImage("next");
+              }}
+              className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md bg-white text-2xl font-semibold text-ink shadow-soft transition hover:bg-stone-100"
+              aria-label="Next image"
+            >
+              &rarr;
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

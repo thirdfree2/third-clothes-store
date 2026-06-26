@@ -3,6 +3,7 @@ package ports
 import (
 	"clothing-service/internal/domain"
 	"context"
+	"time"
 )
 
 type ClothesRepository interface {
@@ -14,5 +15,10 @@ type ClothesRepository interface {
 }
 
 type ClothesListFilter struct {
-	CategoryID *int64
+	CategoryID   *int64
+	ColorID      *int64
+	Name         *string
+	Price        *float64
+	CategoryName *string
+	CreatedDate  *time.Time
 }

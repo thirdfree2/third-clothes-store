@@ -151,6 +151,27 @@ func (h *Handler) List(c *gin.Context) {
 		respondError(c, domain.ErrInvalidCategoryID)
 		return
 	}
+	colorID, err := parseOptionalID(c.Query("color_id"))
+	if err != nil {
+		respondError(c, domain.ErrInvalidColorID)
+		return
+	}
+	price, err := parseOptionalFloat(c.Query("price"))
+	if err != nil {
+		respondError(c, domain.ErrInvalidClothesPrice)
+		return
+	}
+	createdDate, err := parseOptionalDate(c.Query("created_date"))
+	if err != nil {
+		httpcommon.RespondError(
+			c,
+			http.StatusBadRequest,
+			httpcommon.CodeValidationError,
+			"invalid created date",
+			nil,
+		)
+		return
+	}
 
 	clothesList, total, err := h.service.List(
 		c.Request.Context(),
@@ -159,7 +180,12 @@ func (h *Handler) List(c *gin.Context) {
 			Offset: p.Offset,
 		},
 		ports.ClothesListFilter{
-			CategoryID: categoryID,
+			CategoryID:   categoryID,
+			ColorID:      colorID,
+			Name:         optionalString(c.Query("name")),
+			Price:        price,
+			CategoryName: optionalString(c.Query("category")),
+			CreatedDate:  createdDate,
 		},
 	)
 
@@ -369,6 +395,41 @@ func parseOptionalID(value string) (*int64, error) {
 	}
 
 	return &id, nil
+}
+
+func optionalString(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	return &value
+}
+
+func parseOptionalFloat(value string) (*float64, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+
+	n, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &n, nil
+}
+
+func parseOptionalDate(value string) (*time.Time, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+
+	createdDate, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil, err
+	}
+
+	return &createdDate, nil
 }
 
 func toResponse(clothes *domain.Clothes, minIOPublicBaseURL string) ClothesResponse {

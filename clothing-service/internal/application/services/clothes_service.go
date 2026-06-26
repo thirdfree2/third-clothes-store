@@ -151,6 +151,16 @@ func (s *ClothesService) List(
 		return nil, 0, err
 	}
 
+	if err := validateColorID(filter.ColorID); err != nil {
+		return nil, 0, err
+	}
+
+	if filter.Price != nil {
+		if err := validatePrice(*filter.Price); err != nil {
+			return nil, 0, err
+		}
+	}
+
 	return s.repo.List(ctx, pagination, filter)
 }
 

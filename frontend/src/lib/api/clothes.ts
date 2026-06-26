@@ -1,8 +1,19 @@
 import { apiFetch, apiFormDataFetch } from "./client";
 import type { Clothes, ClothesImage, PaginatedPayload } from "./types";
 
+type ClothesListParams = {
+  page?: number;
+  perPage?: number | "all";
+  category_id?: number;
+  color_id?: number;
+  name?: string;
+  price?: number;
+  category?: string;
+  created_date?: string;
+};
+
 export const clothesApi = {
-  list(params: { page?: number; perPage?: number; category_id?: number } = {}) {
+  list(params: ClothesListParams = {}) {
     return apiFetch<PaginatedPayload<Clothes>>("/api/v1/clothes", {
       query: params,
       cache: "no-store",

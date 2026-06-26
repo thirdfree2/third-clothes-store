@@ -3,6 +3,7 @@ package httpcommon
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,8 +34,18 @@ type PaginatedResponse[T any] struct {
 }
 
 func ParsePagination(c *gin.Context) PaginationRequest {
+	perPageQuery := strings.TrimSpace(strings.ToLower(c.Query("perPage")))
+	if perPageQuery == "all" {
+		return PaginationRequest{
+			Page:    DefaultPage,
+			PerPage: 0,
+			Limit:   -1,
+			Offset:  0,
+		}
+	}
+
 	page := parsePositiveInt(c.Query("page"), DefaultPage)
-	perPage := parsePositiveInt(c.Query("perPage"), DefaultPerPage)
+	perPage := parsePositiveInt(perPageQuery, DefaultPerPage)
 
 	if perPage > MaxPerPage {
 		perPage = MaxPerPage
@@ -57,7 +68,9 @@ func NewPaginatedResponse[T any](
 	perPage int,
 ) PaginatedResponse[T] {
 	totalPages := 0
-	if perPage > 0 {
+	if perPage == 0 && total > 0 {
+		totalPages = 1
+	} else if perPage > 0 {
 		totalPages = int(math.Ceil(float64(total) / float64(perPage)))
 	}
 

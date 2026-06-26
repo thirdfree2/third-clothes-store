@@ -6,6 +6,7 @@ import (
 	"user-service/internal/application/ports"
 	"user-service/internal/domain"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -41,7 +42,7 @@ func (r *Repository) FindByUserID(ctx context.Context, userID int64) (*domain.Cu
 func (r *Repository) Upsert(ctx context.Context, profile *domain.CustomerProfile) error {
 	model := toModel(profile)
 
-	return r.db.WithContext(ctx).
+	if err := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "user_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{
@@ -53,7 +54,24 @@ func (r *Repository) Upsert(ctx context.Context, profile *domain.CustomerProfile
 				"updated_at",
 			}),
 		}).
-		Create(&model).Error
+		Create(&model).Error; err != nil {
+		if isDuplicateCustomerPhoneError(err) {
+			return domain.ErrCustomerPhoneDuplicated
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func isDuplicateCustomerPhoneError(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+		return false
+	}
+
+	return pgErr.ConstraintName == "idx_customer_profiles_phone"
 }
 
 func (r *Repository) FindDefaultByUserID(ctx context.Context, userID int64) (*domain.CustomerAddress, error) {

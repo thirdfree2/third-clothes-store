@@ -3,6 +3,8 @@ package postgresclothes
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"clothing-service/internal/application/ports"
 	"clothing-service/internal/domain"
@@ -105,20 +107,56 @@ func (r *Repository) List(
 	baseQuery := r.db.WithContext(ctx).
 		Model(&ClothesModel{}).
 		Where("deleted_at IS NULL")
+	needsDistinct := false
 
 	if filter.CategoryID != nil {
 		baseQuery = baseQuery.
 			Joins("JOIN clothes_categories ON clothes_categories.clothes_id = clothes.id").
 			Where("clothes_categories.category_id = ?", *filter.CategoryID)
+		needsDistinct = true
 	}
 
-	if err := baseQuery.Count(&total).Error; err != nil {
+	if filter.ColorID != nil {
+		baseQuery = baseQuery.Where("clothes.color_id = ?", *filter.ColorID)
+	}
+
+	if filter.Name != nil && strings.TrimSpace(*filter.Name) != "" {
+		baseQuery = baseQuery.Where("LOWER(clothes.name) LIKE ?", "%"+strings.ToLower(strings.TrimSpace(*filter.Name))+"%")
+	}
+
+	if filter.Price != nil {
+		baseQuery = baseQuery.Where("clothes.price = ?", *filter.Price)
+	}
+
+	if filter.CategoryName != nil && strings.TrimSpace(*filter.CategoryName) != "" {
+		baseQuery = baseQuery.
+			Joins("JOIN clothes_categories AS search_clothes_categories ON search_clothes_categories.clothes_id = clothes.id").
+			Joins("JOIN categories AS search_categories ON search_categories.id = search_clothes_categories.category_id").
+			Where("LOWER(search_categories.name) LIKE ?", "%"+strings.ToLower(strings.TrimSpace(*filter.CategoryName))+"%")
+		needsDistinct = true
+	}
+
+	if filter.CreatedDate != nil {
+		start := beginningOfDay(*filter.CreatedDate)
+		baseQuery = baseQuery.Where("clothes.created_at >= ? AND clothes.created_at < ?", start, start.AddDate(0, 0, 1))
+	}
+
+	countQuery := baseQuery
+	if needsDistinct {
+		countQuery = countQuery.Distinct("clothes.id")
+	}
+
+	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var models []ClothesModel
+	listQuery := baseQuery
+	if needsDistinct {
+		listQuery = listQuery.Distinct("clothes.*")
+	}
 
-	if err := baseQuery.
+	if err := listQuery.
 		Preload("Color").
 		Preload("Categories").
 		Preload("Images").
@@ -135,6 +173,11 @@ func (r *Repository) List(
 	}
 
 	return clothesList, total, nil
+}
+
+func beginningOfDay(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
 }
 
 func (r *Repository) Delete(ctx context.Context, id int64) error {

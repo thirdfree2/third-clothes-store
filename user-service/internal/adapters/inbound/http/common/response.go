@@ -11,6 +11,7 @@ const (
 	CodeValidationError     = 400001
 	CodeUnauthorized        = 401000
 	CodeForbidden           = 403000
+	CodeDuplicatePhone      = 409101
 	CodeProfileNotFound     = 404101
 	CodeCartItemNotFound    = 404201
 	CodeInternalServerError = 500000

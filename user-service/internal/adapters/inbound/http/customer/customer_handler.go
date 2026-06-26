@@ -299,6 +299,8 @@ func respondError(c *gin.Context, err error) {
 		httpcommon.RespondError(c, http.StatusNotFound, httpcommon.CodeProfileNotFound, "customer profile not found", nil)
 	case errors.Is(err, domain.ErrCustomerAddressNotFound):
 		httpcommon.RespondError(c, http.StatusNotFound, httpcommon.CodeProfileNotFound, "customer address not found", nil)
+	case errors.Is(err, domain.ErrCustomerPhoneDuplicated):
+		httpcommon.RespondError(c, http.StatusConflict, httpcommon.CodeDuplicatePhone, "phone number already exists", nil)
 	default:
 		httpcommon.RespondError(c, http.StatusInternalServerError, httpcommon.CodeInternalServerError, "internal server error", map[string]any{"error": err.Error()})
 	}
